@@ -1,0 +1,82 @@
+name: Estimate VRAM
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_name:
+        description: "Hugging Face model id (e.g. nvidia/Llama-3.1-Nemotron-Nano-4B-v1.1)"
+        required: true
+        type: string
+      context_length:
+        description: "Context length (e.g. 128000)"
+        required: true
+        type: number
+      batch_size:
+        description: "Batch size"
+        required: false
+        default: "1"
+        type: string
+      dtype:
+        description: "dtype (float16, bfloat16, float32)"
+        required: false
+        default: "float16"
+        type: choice
+        options:
+          - float16
+          - bfloat16
+          - float32
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install transformers huggingface_hub
+
+      # If you hit rate limits / gated models:
+      - name: HF login (optional)
+        if: ${{ secrets.HF_TOKEN != '' }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python -c "from huggingface_hub import login; import os; login(token=os.environ['HF_TOKEN'])"
+
+      - name: Run estimator
+        run: |
+          python estimate_vram.py \
+            --model_name "${{ inputs.model_name }}" \
+            --context_length ${{ inputs.context_length }} \
+            --batch_size ${{ inputs.batch_size }} \
+            --dtype "${{ inputs.dtype }}" \
+            | tee output.txt
+
+      - name: Write to job summary
+        run: |
+          echo "## VRAM Estimate" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Model:** \`${{ inputs.model_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Context:** \`${{ inputs.context_length }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Batch:** \`${{ inputs.batch_size }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**dtype:** \`${{ inputs.dtype }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat result.json >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload result artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vram-estimate
+          path: |
+            result.json
+            output.txt
