@@ -45,12 +45,12 @@ jobs:
 
       # If you hit rate limits / gated models:
       - name: HF login (optional)
-        if: ${{ secrets.HF_TOKEN != '' }}
+        if: ${{ env.HF_TOKEN != '' }}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python -c "from huggingface_hub import login; import os; login(token=os.environ['HF_TOKEN'])"
-
+          
       - name: Run estimator
         run: |
           python estimate_vram.py \
